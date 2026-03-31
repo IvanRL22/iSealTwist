@@ -1,0 +1,53 @@
+name: Release AddOn
+
+on:
+  push:
+    tags:
+      - '*' # Trigger on any tag
+
+env:
+  CF_API_KEY: ${{ secrets.CF_API_KEY }}
+  GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for tags
+
+      - name: Prepare Build Directory
+        run: |
+          # Ensure the build directory exists
+          mkdir -p build
+
+          # Create a clean folder structure for the add-on
+          mkdir -p build/iSealTwist
+
+          # Copy repository files to the final folder
+          cp -r $(ls -A | grep -v build) build/iSealTwist/
+
+          # Navigate to the build directory
+          cd build
+
+          # Create the zip file with the tag in the name
+          zip -r iSealTwist-$(git describe --tags).zip iSealTwist
+
+      - name: Extract Changelog for Latest Version
+        id: changelog
+        run: |
+          # Extract everything between the first and second version headers in CHANGELOG.txt
+          changelog=$(awk '/^v[0-9]+\.[0-9]+/{if(found) exit; found=1; next} found' CHANGELOG.txt)
+          # Write to GITHUB_OUTPUT using delimiter for multiline
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Publish to CurseForge
+        uses: BigWigsMods/packager@v2
+        with:
+          name: iSealTwist
+          path: build/iSealTwist-$(git describe --tags).zip
+          changelog: ${{ steps.changelog.outputs.changelog }}

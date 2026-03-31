@@ -1,0 +1,55 @@
+================================================================================
+ iSealTwist - Changelog
+================================================================================
+
+v0.1.1 - Release
+--------------------------------------------------------------------------------
+
+ [NEW] Twist Result Feedback
+  - "Seal Twisted!" (green) when seal changes inside the twist window
+  - "Fail Twist!" (red) when seal changes after the swing lands
+  - Text fades out over min(1s, 50% weapon speed)
+
+ [NEW] SealTwistTank macro auto-created on first load
+  - /castsequence reset=cmb Seal of Righteousness, Seal of the Martyr
+
+ [NEW] Minimap button via LibDBIcon
+  - Left click: Open settings, Right click: Toggle bar lock
+
+ [NEW] Scrollable settings panel with custom slider bars
+
+v0.1.0 - Release
+--------------------------------------------------------------------------------
+
+ [NEW] Visual Swing Timer Bar
+  - Standalone movable/lockable bar tracking white melee swing timer
+  - Fills left-to-right with time remaining countdown
+  - Weapon speed display on the bar
+  - Auto-hides out of combat (configurable)
+
+ [NEW] Twist Window Indicator
+  - Vertical marker line showing ideal twist point on the bar
+  - Colored zone (green) from twist point to end of swing
+  - Configurable twist window (200-600ms, default 400ms)
+  - Latency compensation: adjusts twist point based on home latency
+
+ [NEW] Seal Tracking
+  - Displays active seal icon next to the bar
+  - Seal name shown below the bar
+  - Detects all TBC seals (Command, Blood, Righteousness, Vengeance, etc.)
+  - Updates on seal change via combat log and aura scanning
+
+ [NEW] Settings Panel (/ist settings)
+  - Bar dimensions (width/height sliders)
+  - Twist window timing slider
+  - Latency display toggle
+  - Seal icon toggle
+  - Combat-only and Paladin-only options
+  - Lock/unlock bar position
+  - Reset position and test mode buttons
+
+ [NEW] Slash Commands
+  - /ist settings — Open settings panel
+  - /ist lock — Toggle bar lock
+  - /ist reset — Reset bar position to center
+  - /ist test — Simulate a 3.6s swing for testing
