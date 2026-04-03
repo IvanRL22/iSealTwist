@@ -76,9 +76,13 @@ iST.SEALS = {
     [20919] = "Seal of Command",
     [20920] = "Seal of Command",
     [27170] = "Seal of Command",
-    -- Seal of Blood / Martyr
+    -- Seal of Blood (Horde)
     [31892] = "Seal of Blood",
+    [38008] = "Seal of Blood",
+    [41459] = "Seal of Blood",
+    -- Seal of the Martyr (Alliance)
     [53720] = "Seal of the Martyr",
+    [348700] = "Seal of the Martyr",
     -- Seal of Righteousness (ranks)
     [20154] = "Seal of Righteousness",
     [20287] = "Seal of Righteousness",
@@ -135,6 +139,7 @@ iST.State = {
     InTwistZone = false,
     SealChangedInTwistZone = false,
     PendingSealChange = false,
+    PreviousSealID = nil,
     TwistResultStart = 0,
     TwistResultDuration = 0,
 }
@@ -143,6 +148,7 @@ iST.State = {
 -- │                              Settings Defaults                                 │
 -- ╰────────────────────────────────────────────────────────────────────────────────╯
 iST.SettingsDefault = {
+    enabled = true,
     barWidth = 250,
     barHeight = 25,
     barLocked = false,
@@ -434,7 +440,7 @@ end
 -- │                           Show / Hide Bar                                      │
 -- ╰────────────────────────────────────────────────────────────────────────────────╯
 function iST:ShowBar()
-    if self.BarFrame then
+    if self.BarFrame and iSTSettings.enabled then
         self.BarFrame:Show()
         self.State.BarVisible = true
     end
@@ -519,36 +525,36 @@ end
 -- ╰────────────────────────────────────────────────────────────────────────────────╯
 function iST:OnCombatLogEvent()
     local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, spellID = CombatLogGetCurrentEventInfo()
+    local playerGUID = UnitGUID("player")
 
-    -- Only care about events from the player
-    if sourceGUID ~= UnitGUID("player") then return end
-
-    -- White swing hit or miss — reset swing timer
-    if subevent == "SWING_DAMAGE" or subevent == "SWING_MISSED" then
-        self:ResetSwingTimer()
-        return
-    end
-
-    -- Spell that resets swing timer (e.g., Crusader Strike)
-    if (subevent == "SPELL_DAMAGE" or subevent == "SPELL_MISSED") and spellID and self.SWING_RESET_SPELLS[spellID] then
-        self:ResetSwingTimer()
-        return
-    end
-
-    -- Seal applied to player
-    if subevent == "SPELL_AURA_APPLIED" and destGUID == UnitGUID("player") then
-        if spellID and self.SEALS[spellID] then
-            self:SetCurrentSeal(spellID)
+    -- Swing events (player as source)
+    if sourceGUID == playerGUID then
+        if subevent == "SWING_DAMAGE" or subevent == "SWING_MISSED" then
+            self:ResetSwingTimer()
+            return
         end
-        return
+
+        if (subevent == "SPELL_DAMAGE" or subevent == "SPELL_MISSED") and spellID and self.SWING_RESET_SPELLS[spellID] then
+            self:ResetSwingTimer()
+            return
+        end
     end
 
-    -- Seal removed from player
-    if subevent == "SPELL_AURA_REMOVED" and destGUID == UnitGUID("player") then
-        if spellID and self.SEALS[spellID] and self.State.CurrentSealID == spellID then
-            self:ClearCurrentSeal()
+    -- Seal aura events (player as destination — separate from source check)
+    if destGUID == playerGUID and spellID then
+        if subevent == "SPELL_AURA_APPLIED" or subevent == "SPELL_AURA_REFRESH" then
+            if self.SEALS[spellID] then
+                self:SetCurrentSeal(spellID)
+            end
+            return
         end
-        return
+
+        if subevent == "SPELL_AURA_REMOVED" then
+            if self.SEALS[spellID] and (self.State.CurrentSealID == spellID) then
+                self:ClearCurrentSeal()
+            end
+            return
+        end
     end
 end
 
@@ -559,35 +565,38 @@ function iST:SetCurrentSeal(spellID)
     local name = self.SEALS[spellID]
     if not name then return end
 
-    local previousSealID = self.State.CurrentSealID
+    local previousSealID = self.State.CurrentSealID or self.State.PreviousSealID
     self.State.CurrentSealID = spellID
+    self.State.PreviousSealID = nil -- clear once consumed
     self.State.CurrentSealName = name
     self.State.CurrentSealIcon = GetSpellTexture(spellID)
 
     -- Detect twist timing (only if seal actually changed)
-    if previousSealID and previousSealID ~= spellID and self.State.NextSwingTime > 0 and self.State.WeaponSpeed > 0 then
-        local now = GetTime()
+    if previousSealID and previousSealID ~= spellID then
+        if self.State.NextSwingTime > 0 and self.State.WeaponSpeed > 0 then
+            local now = GetTime()
 
-        -- Calculate twist zone inline (don't rely on OnUpdate cache)
-        local twistWindowSec = iSTSettings.twistWindow
-        local lagComp = self.State.HomeLag * 0.002
-        local twistStart = 1.0 - (twistWindowSec + lagComp) / self.State.WeaponSpeed
-        twistStart = math.max(0.1, math.min(twistStart, 0.95))
-        local progress = (now - self.State.LastSwingTime) / self.State.WeaponSpeed
+            -- Calculate twist zone inline (don't rely on OnUpdate cache)
+            local twistWindowSec = iSTSettings.twistWindow
+            local lagComp = self.State.HomeLag * 0.002
+            local twistStart = 1.0 - (twistWindowSec + lagComp) / self.State.WeaponSpeed
+            twistStart = math.max(0.1, math.min(twistStart, 0.95))
+            local progress = (now - self.State.LastSwingTime) / self.State.WeaponSpeed
 
-        if now >= self.State.NextSwingTime then
-            -- Seal changed after the swing should have landed — fail!
-            self.State.PendingSealChange = false
-            self:ShowTwistResult(false)
-        elseif progress >= twistStart then
-            -- Seal changed inside the twist window — success!
-            self.State.SealChangedInTwistZone = true
-            self.State.PendingSealChange = false
-            self:ShowTwistResult(true)
-        else
-            -- Seal changed before twist window — mark as pending
-            self.State.PendingSealChange = true
-            self.State.SealChangedInTwistZone = false
+            if now >= self.State.NextSwingTime then
+                -- Seal changed after the swing should have landed — fail!
+                self.State.PendingSealChange = false
+                self:ShowTwistResult(false)
+            elseif progress >= twistStart then
+                -- Seal changed inside the twist window — success!
+                self.State.SealChangedInTwistZone = true
+                self.State.PendingSealChange = false
+                self:ShowTwistResult(true)
+            else
+                -- Seal changed before twist window — too early
+                self.State.PendingSealChange = true
+                self.State.SealChangedInTwistZone = false
+            end
         end
     end
 
@@ -595,6 +604,10 @@ function iST:SetCurrentSeal(spellID)
 end
 
 function iST:ClearCurrentSeal()
+    -- Preserve previous seal ID so twist detection works across REMOVED→APPLIED gap
+    if self.State.CurrentSealID then
+        self.State.PreviousSealID = self.State.CurrentSealID
+    end
     self.State.CurrentSealID = nil
     self.State.CurrentSealName = nil
     self.State.CurrentSealIcon = nil
@@ -667,9 +680,24 @@ function iST:CreateMinimapButton()
     self.MinimapDataObject = LDBroker:NewDataObject("iSealTwist", {
         type = "data source",
         text = "iSealTwist",
-        icon = "Interface\\Icons\\Spell_Holy_SealOfCommand",
+        icon = "Interface\\AddOns\\iSealTwist\\Images\\Logo_iST",
         OnClick = function(_, button)
-            if button == "LeftButton" then
+            if button == "LeftButton" and IsShiftKeyDown() then
+                iSTSettings.barLocked = not iSTSettings.barLocked
+                if iSTSettings.barLocked then
+                    print(L["BarLocked"])
+                else
+                    print(L["BarUnlocked"])
+                end
+            elseif button == "LeftButton" then
+                iSTSettings.enabled = not iSTSettings.enabled
+                if iSTSettings.enabled then
+                    print(L["BarEnabled"])
+                else
+                    print(L["BarDisabled"])
+                    iST:HideBar()
+                end
+            elseif button == "RightButton" then
                 if iST.SettingsFrame and iST.SettingsFrame:IsShown() then
                     iST.SettingsFrame:Hide()
                 else
@@ -680,19 +708,13 @@ function iST:CreateMinimapButton()
                         iST.SettingsFrame:Show()
                     end
                 end
-            elseif button == "RightButton" then
-                iSTSettings.barLocked = not iSTSettings.barLocked
-                if iSTSettings.barLocked then
-                    print(L["BarLocked"])
-                else
-                    print(L["BarUnlocked"])
-                end
             end
         end,
         OnTooltipShow = function(tooltip)
             tooltip:SetText(Colors.iST .. "iSealTwist" .. Colors.Green .. " v" .. iST.Version, 1, 1, 1)
             tooltip:AddLine(" ", 1, 1, 1)
             tooltip:AddLine(L["MinimapLeftClick"], 1, 1, 1)
+            tooltip:AddLine(L["MinimapShiftLeftClick"], 1, 1, 1)
             tooltip:AddLine(L["MinimapRightClick"], 1, 1, 1)
             tooltip:Show()
         end,
@@ -711,15 +733,19 @@ function iST:CreateTwistMacro()
     -- Only create once — flag saved so users can freely remove/rename the macros
     if iSTSettings.macroCreated then return end
 
+    -- Faction-aware seal name: Alliance = Seal of the Martyr, Horde = Seal of Blood
+    local faction = UnitFactionGroup("player")
+    local twistSeal = (faction == "Horde") and "Seal of Blood" or "Seal of the Martyr"
+
     local macros = {
         {
             name = "SealTwist",
-            body = "#showtooltip\n/startattack\n/castsequence reset=30 Seal of Command, Seal of the Martyr",
+            body = "#showtooltip\n/castsequence reset=30 Seal of Command, " .. twistSeal .. "\n/startattack",
             icon = "INV_Hammer_04",
         },
         {
             name = "SealTwistTank",
-            body = "#showtooltip\n/startattack\n/castsequence reset=cmb Seal of Righteousness, Seal of the Martyr",
+            body = "#showtooltip\n/castsequence reset=cmb Seal of Righteousness, " .. twistSeal .. "\n/startattack",
             icon = "Spell_Holy_SealOfRighteousness",
         },
     }
