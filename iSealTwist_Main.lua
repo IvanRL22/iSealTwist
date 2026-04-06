@@ -51,6 +51,31 @@ iST.AddonPath = "Interface\\AddOns\\iSealTwist\\"
 
 -- Game version info
 iST.GameVersion, iST.GameBuild, iST.GameBuildDate, iST.GameTocVersion = GetBuildInfo()
+iST.GameVersionName = ""
+
+-- Game version detection
+local gameTocNumber = tonumber(iST.GameTocVersion) or 0
+if gameTocNumber >= 20500 and gameTocNumber < 30000 then
+    iST.GameVersionName = "Anniversary TBC"
+    iST.SupportedVersion = true
+else
+    iST.SupportedVersion = false
+    if gameTocNumber >= 120000 then
+        iST.GameVersionName = "Retail WoW"
+    elseif gameTocNumber > 50000 and gameTocNumber < 59999 then
+        iST.GameVersionName = "Classic MoP"
+    elseif gameTocNumber > 40000 and gameTocNumber < 49999 then
+        iST.GameVersionName = "Classic Cata"
+    elseif gameTocNumber > 30000 and gameTocNumber < 39999 then
+        iST.GameVersionName = "Classic WotLK"
+    elseif gameTocNumber >= 20000 and gameTocNumber < 20500 then
+        iST.GameVersionName = "Classic TBC"
+    elseif gameTocNumber > 10000 and gameTocNumber < 19999 then
+        iST.GameVersionName = "Classic Era"
+    else
+        iST.GameVersionName = "Unknown Version"
+    end
+end
 
 -- ╭────────────────────────────────────────────────────────────────────────────────╮
 -- │                                  Constants                                     │
@@ -698,16 +723,7 @@ function iST:CreateMinimapButton()
                     iST:HideBar()
                 end
             elseif button == "RightButton" then
-                if iST.SettingsFrame and iST.SettingsFrame:IsShown() then
-                    iST.SettingsFrame:Hide()
-                else
-                    if not iST.SettingsFrame and iST.CreateOptionsPanel then
-                        iST:CreateOptionsPanel()
-                    end
-                    if iST.SettingsFrame then
-                        iST.SettingsFrame:Show()
-                    end
-                end
+                iST:SettingsToggle()
             end
         end,
         OnTooltipShow = function(tooltip)
@@ -810,18 +826,7 @@ function iST:RegisterSlashCommands()
         local cmd = msg and msg:lower():trim() or ""
 
         if cmd == "settings" or cmd == "options" or cmd == "config" then
-            if iST.SettingsFrame then
-                if iST.SettingsFrame:IsShown() then
-                    iST.SettingsFrame:Hide()
-                else
-                    iST.SettingsFrame:Show()
-                end
-            elseif iST.CreateOptionsPanel then
-                iST:CreateOptionsPanel()
-                if iST.SettingsFrame then
-                    iST.SettingsFrame:Show()
-                end
-            end
+            iST:SettingsToggle()
         elseif cmd == "lock" then
             iSTSettings.barLocked = not iSTSettings.barLocked
             if iSTSettings.barLocked then
@@ -934,6 +939,13 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 function iST:OnAddonLoaded()
     -- Initialize saved settings
     self:InitializeSettings()
+
+    -- Version warning (non-blocking)
+    if not self.SupportedVersion then
+        C_Timer.After(2, function()
+            print(L["PrintPrefix"] .. Colors.Yellow .. string.format(L["UnsupportedVersion"], iST.GameVersionName) .. Colors.Reset)
+        end)
+    end
 
     -- Class gate
     local _, playerClass = UnitClass("player")

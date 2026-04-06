@@ -52,6 +52,7 @@ L["DebugError"] = Colors.iST .. "[iST]: " .. Colors.Red .. "ERROR: " .. Colors.R
 
 L["AddonLoaded"] = Msg(Colors.iST .. "iSealTwist " .. Colors.Green .. "v%s" .. Colors.Reset .. " Loaded.")
 L["NotPaladin"] = Msg("Only active for Paladins. Disable 'Only As Paladin' in settings to override.")
+L["UnsupportedVersion"] = "iSealTwist is designed for Anniversary TBC only. Detected: %s. The swing timer and seal twist features are disabled."
 L["BarEnabled"] = Msg("Swing timer " .. Colors.Green .. "enabled" .. Colors.iST .. ".")
 L["BarDisabled"] = Msg("Swing timer " .. Colors.Red .. "disabled" .. Colors.iST .. ".")
 L["BarLocked"] = Msg("Bar " .. Colors.Green .. "locked" .. Colors.iST .. ".")
@@ -75,6 +76,12 @@ L["SlashHelp5"] = Colors.Yellow .. "  /ist test" .. Colors.Reset .. " — Simula
 -- │                                Settings Panel                                  │
 -- ╰────────────────────────────────────────────────────────────────────────────────╯
 L["SettingsTitle"] = Colors.iST .. "iSealTwist — Settings"
+
+-- Sidebar
+L["TabGeneral"] = "General"
+L["TabDisplay"] = "Display"
+L["TabAbout"] = "About"
+L["SidebarOtherAddons"] = "Other Addons"
 
 -- Bar Appearance
 L["SectionBarAppearance"] = Colors.iST .. "Bar Appearance"
@@ -104,6 +111,10 @@ L["ShowTwistSuccessDesc"] = Colors.Gray .. "Show green text on the bar when a tw
 L["ShowTwistFail"] = "Show 'Fail Twist!' Text"
 L["ShowTwistFailDesc"] = Colors.Gray .. "Show red text on the bar when a twist fails (too late).|r"
 
+-- Display sub-sections
+L["SectionVisibility"] = Colors.iST .. "Visibility"
+L["SectionTwistFeedback"] = Colors.iST .. "Twist Feedback"
+
 -- Position
 L["SectionPosition"] = Colors.iST .. "Position"
 L["LockBar"] = "Lock Bar Position"
@@ -115,3 +126,28 @@ L["TestBar"] = "Test Bar"
 L["SectionAbout"] = Colors.iST .. "About"
 L["AboutText"] = Colors.iST .. "iSealTwist " .. Colors.Reset .. "is a seal twist timing helper for TBC Paladins. It tracks your weapon swing timer and shows the optimal window to twist seals for maximum DPS."
 L["CreatedBy"] = "Created by: "
+L["ISTCurseForgeLink"] = "Available on CurseForge: curseforge.com/wow/addons/isealtwist"
+
+-- ╭────────────────────────────────────────────────────────────────────────────────╮
+-- │                              Other Addon Tabs                                  │
+-- ╰────────────────────────────────────────────────────────────────────────────────╯
+L["TabIWR"] = "iWR Settings"
+L["TabIWRPromo"] = "iWillRemember"
+L["TabISP"] = "iSP Settings"
+L["TabISPPromo"] = "iSoundPlayer"
+L["TabICC"] = "iCC Settings"
+L["TabICCPromo"] = "iCommunityChat"
+L["TabINIF"] = "iNIF Settings"
+L["TabINIFPromo"] = "iNeedIfYouNeed"
+
+-- ╭────────────────────────────────────────────────────────────────────────────────╮
+-- │                              Other Addon Promos                                │
+-- ╰────────────────────────────────────────────────────────────────────────────────╯
+L["IWRPromoDesc"] = Colors.iST .. "iWillRemember " .. Colors.Reset .. "is a player notes addon. Track, rate, and share notes about players with your friends. Never forget a ninja looter again."
+L["IWRPromoLink"] = "Available on CurseForge: curseforge.com/wow/addons/iwillremember"
+L["ISPPromoDesc"] = Colors.iST .. "iSoundPlayer " .. Colors.Reset .. "is a custom sound addon. Play your own sounds on game events, spell cooldowns, and buff changes. Your game, your sounds."
+L["ISPPromoLink"] = "Available on CurseForge: curseforge.com/wow/addons/isoundplayer"
+L["ICCPromoDesc"] = Colors.iST .. "iCommunityChat " .. Colors.Reset .. "is a cross-guild community chat addon. Chat across guilds with a shared channel and roster."
+L["ICCPromoLink"] = "Available on CurseForge: curseforge.com/wow/addons/icommunitychat"
+L["INIFPromoDesc"] = Colors.iST .. "iNeedIfYouNeed " .. Colors.Reset .. "is a smart loot addon. Automatic need/greed rolling with party coordination. Don't let them ninja without needing back."
+L["INIFPromoLink"] = "Available on CurseForge: curseforge.com/wow/addons/ineedifyouneed"
