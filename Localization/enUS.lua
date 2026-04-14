@@ -94,10 +94,8 @@ L["TwistWindow"] = "Twist Window (ms)"
 L["TwistWindowDesc"] = Colors.Gray .. "Time before swing to start the twist. Default: 400ms.|r"
 L["ShowLatency"] = "Show Latency"
 L["ShowLatencyDesc"] = Colors.Gray .. "Display current home latency on the bar.|r"
-L["CurrentLatency"] = Colors.Gray .. "Current home latency: %dms|r"
 
 -- Display
-L["SectionDisplay"] = Colors.iST .. "Display"
 L["ShowSealIcon"] = "Show Seal Icon"
 L["ShowSealIconDesc"] = Colors.Gray .. "Display the active seal icon next to the bar.|r"
 L["ShowWeaponSpeed"] = "Show Weapon Speed"
@@ -114,6 +112,43 @@ L["ShowTwistFailDesc"] = Colors.Gray .. "Show red text on the bar when a twist f
 -- Display sub-sections
 L["SectionVisibility"] = Colors.iST .. "Visibility"
 L["SectionTwistFeedback"] = Colors.iST .. "Twist Feedback"
+L["SectionSealPair"] = Colors.iST .. "Seal Pair"
+
+-- Seal pair dropdowns
+L["TwistFromSeal"] = "Seal to Twist"
+L["TwistFromSealDesc"] = Colors.Gray .. "The seal you normally have active (the one you cast FROM). Must be Seal of Command or Seal of Righteousness.|r"
+L["TwistIntoSeal"] = "Seal to Twist Into"
+L["TwistIntoSealDesc"] = Colors.Gray .. "The seal you switch to inside the twist window (e.g. Seal of Blood / Seal of the Martyr).|r"
+
+-- GCD indicator & wrong seal warning
+L["ShowGCDIndicator"] = "Show GCD Indicator"
+L["ShowGCDIndicatorDesc"] = Colors.Gray .. "Show a gold marker line on the bar one GCD (1.5s) before the twist window opens — this is when to press your twist macro.|r"
+L["ShowWrongSealWarning"] = "Show Wrong Seal Warning"
+L["ShowWrongSealWarningDesc"] = Colors.Gray .. "Highlight the bar in red when you are not on either of your configured twist seals.|r"
+
+-- Pulse indicators
+L["SectionPulseIndicators"] = Colors.iST .. "Pulse Indicators"
+L["ShowGreenPulse"] = "Green Pulse — Seal1 + Twist Window + GCD Free"
+L["ShowGreenPulseDesc"] = Colors.Gray .. "Pulse green when Seal1 is active, you are inside the twist window, and GCD is available — cast Seal2 now.|r"
+L["ShowOrangePulse"] = "Orange Pulse — Seal2 Active"
+L["ShowOrangePulseDesc"] = Colors.Gray .. "Pulse orange when Seal2 (twist into seal) is active — twist completed, waiting for swing.|r"
+L["ShowRedPulse"] = "Red Pulse — GCD Runs Past Swing"
+L["ShowRedPulseDesc"] = Colors.Gray .. "Pulse red when Seal1 is active but the active GCD will not expire before the swing — too late to twist.|r"
+
+-- Twist text customization
+L["TwistTextSize"] = "Twist Text Size"
+
+-- Bar colors section
+L["SectionBarColors"]   = Colors.iST .. "Bar Colors"
+L["ColorBar"]           = "Fill"
+L["ColorTwistZone"]     = "Twist Zone Fill"
+L["ColorAlert"]         = "Alert (Wrong Seal)"
+L["ColorGCDZone"]       = "GCD Zone"
+L["ColorTwistMarker"]   = "Twist Marker Line"
+L["ColorGCDMarker"]     = "GCD Marker Line"
+L["ColorBorderNormal"]  = "Border"
+L["ColorTwistSuccess"]  = "Twist Success Text"
+L["ColorTwistFail"]     = "Twist Fail Text"
 
 -- Position
 L["SectionPosition"] = Colors.iST .. "Position"
@@ -123,7 +158,6 @@ L["ResetPosition"] = "Reset Position"
 L["TestBar"] = "Test Bar"
 
 -- About
-L["SectionAbout"] = Colors.iST .. "About"
 L["AboutText"] = Colors.iST .. "iSealTwist " .. Colors.Reset .. "is a seal twist timing helper for TBC Paladins. It tracks your weapon swing timer and shows the optimal window to twist seals for maximum DPS."
 L["CreatedBy"] = "Created by: "
 L["ISTCurseForgeLink"] = "Available on CurseForge: curseforge.com/wow/addons/isealtwist"

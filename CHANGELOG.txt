@@ -2,6 +2,32 @@
  iSealTwist - Changelog
 ================================================================================
 
+v0.2.4 - Release
+--------------------------------------------------------------------------------
+
+ [NEW] Pulse Indicators — three color-coded bar pulses for seal twist state:
+  - Green  : Seal1 active + inside twist window + GCD free → cast Seal2 now
+  - Orange : Seal2 active → twist completed, waiting for swing
+  - Red    : Seal1 active + active GCD will not expire before swing → too late
+ [NEW] Each pulse can be toggled independently in Display → Pulse Indicators
+
+v0.2.3 - Release
+--------------------------------------------------------------------------------
+
+ [NEW] GCD Indicator — gold marker line one GCD (1.5s) before the twist window
+ [NEW] GCD Zone — gray shaded block on the bar showing the active GCD window
+       (tracks real spell casts via UNIT_SPELLCAST events)
+ [NEW] Wrong Seal Warning — fill + border turn red when past the GCD mark and
+       not on either configured twist seal; also fires inside the twist window
+ [NEW] Seal Pair settings in Display tab
+  - "Seal to Twist" dropdown: Seal of Command or Seal of Righteousness
+  - "Seal to Twist Into" dropdown: any seal (defaults faction-aware:
+    Seal of Blood for Horde / Seal of the Martyr for Alliance)
+ [NEW] Bar Colors section in General tab — RGBA sliders for every bar color:
+  - Fill, Twist Zone Fill, Alert, GCD Zone, Twist Marker, GCD Marker, Border
+ [NEW] Twist text size slider in Display tab (8–32pt)
+ [CHANGED] Twist result text now uses configurable size (default 16pt)
+
 v0.2.2 - Release
 --------------------------------------------------------------------------------
 

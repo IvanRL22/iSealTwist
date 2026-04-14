@@ -87,6 +87,7 @@ iST.CONSTANTS = {
     LATENCY_UPDATE_INTERVAL = 5,    -- seconds between latency polls
     BAR_UPDATE_RATE = 0.016,        -- ~60fps
     BAR_STALE_THRESHOLD = 0.5,      -- hide bar this long after expected swing
+    GCD_DURATION = 1.5,            -- TBC GCD in seconds
 }
 
 -- ╭────────────────────────────────────────────────────────────────────────────────╮
@@ -167,6 +168,9 @@ iST.State = {
     PreviousSealID = nil,
     TwistResultStart = 0,
     TwistResultDuration = 0,
+    GCDStartTime = 0,
+    GCDEndTime = 0,
+    InCast = false,
 }
 
 -- ╭────────────────────────────────────────────────────────────────────────────────╮
@@ -186,8 +190,23 @@ iST.SettingsDefault = {
     barPoint = { "CENTER", nil, "CENTER", 0, -200 },
     showTwistSuccess = true,
     showTwistFail = true,
-    barColor = { r = 1, g = 0.59, b = 0.09, a = 0.9 },
-    twistZoneColor = { r = 0.2, g = 1, b = 0.2, a = 0.7 },
+    twistTextSize     = 16,
+    twistSuccessColor = { r = 0.2, g = 1.0, b = 0.2, a = 1.0 },
+    twistFailColor    = { r = 1.0, g = 0.2, b = 0.2, a = 1.0 },
+    barColor          = { r = 1,    g = 0.59, b = 0.09, a = 0.9 },
+    twistZoneColor    = { r = 0.2,  g = 1,    b = 0.2,  a = 0.7 },
+    alertColor        = { r = 0.9,  g = 0.1,  b = 0.1,  a = 0.9 },
+    gcdZoneColor      = { r = 0.55, g = 0.55, b = 0.55, a = 0.35 },
+    twistMarkerColor  = { r = 1,    g = 1,    b = 0,    a = 0.9 },
+    gcdMarkerColor    = { r = 1,    g = 0.85, b = 0.3,  a = 0.85 },
+    borderNormalColor = { r = 0.3,  g = 0.3,  b = 0.3,  a = 0.8 },
+    showGCDIndicator  = true,
+    showWrongSealWarning = true,
+    showGreenPulse    = true,   -- Seal1 + in twist window + GCD free  → green pulse
+    showOrangePulse   = true,   -- Seal2 active (twist done)           → orange pulse
+    showRedPulse      = true,   -- Seal1 + GCD runs past swing         → red pulse
+    twistFromSeal     = "Seal of Command",  -- the seal you cast FROM (SoC or SoR)
+    twistIntoSeal     = "",  -- the seal you twist INTO (faction-aware on first load)
     MinimapButton = { hide = false, minimapPos = 220 },
 }
 
@@ -205,6 +224,13 @@ function iST:InitializeSettings()
                 end
             else
                 iSTSettings[key] = value
+            end
+        elseif type(value) == "table" and type(iSTSettings[key]) == "table" then
+            -- Patch missing sub-keys into existing tables (e.g. adding 'a' to old color saves)
+            for k, v in pairs(value) do
+                if iSTSettings[key][k] == nil then
+                    iSTSettings[key][k] = v
+                end
             end
         end
     end
@@ -274,8 +300,72 @@ function iST:CreateSwingBar()
     marker:SetPoint("TOP", bar, "TOPLEFT", 0, 0)
     marker:SetPoint("BOTTOM", bar, "BOTTOMLEFT", 0, 0)
     marker:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-    marker:SetVertexColor(1, 1, 0, 0.9) -- Yellow
+    local tm = iSTSettings.twistMarkerColor
+    marker:SetVertexColor(tm.r, tm.g, tm.b, tm.a)
     bar.twistMarker = marker
+
+    -- Seal switch zone (amber block from GCD marker to twist window — the "cast twistFromSeal here" window)
+    local sealSwitchZone = bar:CreateTexture(nil, "ARTWORK", nil, 3)
+    sealSwitchZone:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+    sealSwitchZone:SetVertexColor(1, 0.55, 0.0, 0.35)
+    sealSwitchZone:SetPoint("TOPLEFT",    bar, "TOPLEFT",    0, -1)
+    sealSwitchZone:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0,  1)
+    sealSwitchZone:SetWidth(1)
+    sealSwitchZone:Hide()
+    bar.sealSwitchZone = sealSwitchZone
+
+    -- Red glow edges (rendered outside bar bounds, pulse in alert mode)
+    local GLOW = 5
+    local function MakeGlowEdge()
+        local g = bar:CreateTexture(nil, "OVERLAY", nil, 5)
+        g:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+        g:SetVertexColor(1, 0.05, 0.05, 0)
+        return g
+    end
+    local ge_top    = MakeGlowEdge()
+    local ge_bottom = MakeGlowEdge()
+    local ge_left   = MakeGlowEdge()
+    local ge_right  = MakeGlowEdge()
+
+    ge_top:SetHeight(GLOW)
+    ge_top:SetPoint("BOTTOMLEFT",  bar, "TOPLEFT",   -GLOW, GLOW)
+    ge_top:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT",   GLOW, GLOW)
+
+    ge_bottom:SetHeight(GLOW)
+    ge_bottom:SetPoint("TOPLEFT",  bar, "BOTTOMLEFT",  -GLOW, -GLOW)
+    ge_bottom:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT",  GLOW, -GLOW)
+
+    ge_left:SetWidth(GLOW)
+    ge_left:SetPoint("TOPRIGHT",    bar, "TOPLEFT",    -GLOW,  GLOW)
+    ge_left:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -GLOW, -GLOW)
+
+    ge_right:SetWidth(GLOW)
+    ge_right:SetPoint("TOPLEFT",    bar, "TOPRIGHT",    GLOW,  GLOW)
+    ge_right:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", GLOW, -GLOW)
+
+    bar.glowEdges = { ge_top, ge_bottom, ge_left, ge_right }
+
+    -- GCD active zone (gray block showing current GCD duration on bar)
+    local gcdZone = bar:CreateTexture(nil, "ARTWORK", nil, 2)
+    gcdZone:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+    local gz = iSTSettings.gcdZoneColor
+    gcdZone:SetVertexColor(gz.r, gz.g, gz.b, gz.a)
+    gcdZone:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
+    gcdZone:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 1)
+    gcdZone:SetWidth(1)
+    gcdZone:Hide()
+    bar.gcdZone = gcdZone
+
+    -- GCD indicator line (vertical — marks where to press SoC)
+    local gcdMarker = bar:CreateTexture(nil, "OVERLAY")
+    gcdMarker:SetWidth(2)
+    gcdMarker:SetPoint("TOP", bar, "TOPLEFT", 0, 0)
+    gcdMarker:SetPoint("BOTTOM", bar, "BOTTOMLEFT", 0, 0)
+    gcdMarker:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+    local gm = iSTSettings.gcdMarkerColor
+    gcdMarker:SetVertexColor(gm.r, gm.g, gm.b, gm.a)
+    gcdMarker:Hide()
+    bar.gcdMarker = gcdMarker
 
     -- Seal icon (left of bar)
     local sealIcon = bar:CreateTexture(nil, "OVERLAY")
@@ -405,24 +495,145 @@ function iST:OnBarUpdate(elapsed)
     local fillWidth = math.max(1, progress * barWidth)
     bar.fill:SetWidth(fillWidth)
 
-    -- Switch fill color based on twist zone
+    -- Determine seal state for visual feedback
     local bc = iSTSettings.barColor
     local tc = iSTSettings.twistZoneColor
-    if progress >= twistStart then
+    local onFromSeal = (state.CurrentSealName == iSTSettings.twistFromSeal)
+    local onIntoSeal = (state.CurrentSealName == iSTSettings.twistIntoSeal)
+    local gcdFree = (state.GCDEndTime == 0 or state.GCDEndTime <= now)
+    local gcdRunsPastSwing = (state.GCDEndTime > 0 and state.GCDEndTime >= state.NextSwingTime)
+    local gcdStartFrac = twistStart - iST.CONSTANTS.GCD_DURATION / state.WeaponSpeed
+
+    -- Three pulsing states (mutually exclusive, priority order):
+    -- ORANGE: Seal2 is active — twist completed, waiting for swing
+    local orangeMode = iSTSettings.showOrangePulse and onIntoSeal
+    -- GREEN:  Seal1 active + inside twist window + GCD free — cast Seal2 now!
+    local greenMode  = iSTSettings.showGreenPulse and
+                       (not orangeMode) and onFromSeal and (progress >= twistStart) and gcdFree
+    -- RED:    Seal1 active + GCD will not expire before swing — missed the window
+    local redMode    = iSTSettings.showRedPulse and iSTSettings.showWrongSealWarning and
+                       (not orangeMode) and onFromSeal and gcdRunsPastSwing
+
+    local ac  = iSTSettings.alertColor
+    local bnc = iSTSettings.borderNormalColor
+    local pulse = math.sin(now * 6) * 0.35 + 0.65
+
+    -- Fill color
+    if redMode then
+        bar.fill:SetVertexColor(ac.r, ac.g, ac.b, ac.a * pulse)
+    elseif greenMode then
+        bar.fill:SetVertexColor(0.2, 1.0, 0.2, tc.a * pulse)
+    elseif orangeMode then
+        bar.fill:SetVertexColor(1.0, 0.55, 0.1, tc.a * pulse)
+    elseif progress >= twistStart then
         bar.fill:SetVertexColor(tc.r, tc.g, tc.b, tc.a)
     else
         bar.fill:SetVertexColor(bc.r, bc.g, bc.b, bc.a)
+    end
+
+    -- Border + glow edges
+    local glowAlpha = (redMode or greenMode or orangeMode) and pulse or 0
+    local gr, gg, gb
+    if redMode then
+        gr, gg, gb = ac.r, ac.g, ac.b
+    elseif greenMode then
+        gr, gg, gb = 0.2, 1.0, 0.2
+    elseif orangeMode then
+        gr, gg, gb = 1.0, 0.55, 0.1
+    else
+        gr, gg, gb = bnc.r, bnc.g, bnc.b
+    end
+
+    if bar.SetBackdropBorderColor then
+        if redMode or greenMode or orangeMode then
+            bar:SetBackdropBorderColor(gr, gg, gb, glowAlpha)
+        elseif progress >= twistStart then
+            bar:SetBackdropBorderColor(tc.r, tc.g, tc.b, 0.9)
+        else
+            bar:SetBackdropBorderColor(bnc.r, bnc.g, bnc.b, bnc.a)
+        end
+    end
+    if bar.glowEdges then
+        local edgeAlpha = (redMode and glowAlpha) or
+                          (greenMode and glowAlpha * 0.8) or
+                          (orangeMode and glowAlpha * 0.7) or 0
+        for _, g in ipairs(bar.glowEdges) do
+            g:SetVertexColor(gr, gg * (redMode and 0.3 or 1.0), gb * (redMode and 0.3 or 1.0), edgeAlpha)
+        end
+    end
+
+    -- GCD zone color (update each frame in case settings changed)
+    if bar.gcdZone then
+        local gz = iSTSettings.gcdZoneColor
+        bar.gcdZone:SetVertexColor(gz.r, gz.g, gz.b, gz.a)
     end
 
     -- Update twist zone overlay position
     local twistZoneWidth = math.max(1, (1.0 - twistStart) * barWidth)
     bar.twistZone:SetWidth(twistZoneWidth)
 
-    -- Update twist marker line position
+    -- Update twist marker line position + color
     local markerX = 1 + (twistStart * barWidth)
     bar.twistMarker:ClearAllPoints()
     bar.twistMarker:SetPoint("TOP", bar, "TOPLEFT", markerX, 0)
     bar.twistMarker:SetPoint("BOTTOM", bar, "BOTTOMLEFT", markerX, 0)
+    local tm = iSTSettings.twistMarkerColor
+    bar.twistMarker:SetVertexColor(tm.r, tm.g, tm.b, tm.a)
+
+    -- GCD active zone: gray block from GCD start to GCD end
+    if bar.gcdZone then
+        local gcdEnd = state.GCDEndTime
+        if gcdEnd > now and state.WeaponSpeed > 0 then
+            local startFrac = (state.GCDStartTime - state.LastSwingTime) / state.WeaponSpeed
+            local endFrac   = (gcdEnd           - state.LastSwingTime) / state.WeaponSpeed
+            startFrac = math.max(0, math.min(startFrac, 1))
+            endFrac   = math.max(0, math.min(endFrac, 1))
+            local zoneWidth = math.max(1, (endFrac - startFrac) * barWidth)
+            local startX = 1 + startFrac * barWidth
+            bar.gcdZone:ClearAllPoints()
+            bar.gcdZone:SetPoint("TOPLEFT",    bar, "TOPLEFT",    startX, -1)
+            bar.gcdZone:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", startX,  1)
+            bar.gcdZone:SetWidth(zoneWidth)
+            bar.gcdZone:Show()
+        else
+            bar.gcdZone:Hide()
+        end
+    end
+
+    -- GCD indicator: position one GCD before the twist window opens
+    if bar.gcdMarker then
+        if iSTSettings.showGCDIndicator and state.WeaponSpeed > 0 then
+            local gcdStart = twistStart - iST.CONSTANTS.GCD_DURATION / state.WeaponSpeed
+            if gcdStart > 0.02 then
+                local gcdX = 1 + (gcdStart * barWidth)
+                bar.gcdMarker:ClearAllPoints()
+                bar.gcdMarker:SetPoint("TOP", bar, "TOPLEFT", gcdX, 0)
+                bar.gcdMarker:SetPoint("BOTTOM", bar, "BOTTOMLEFT", gcdX, 0)
+                local gmColor = iSTSettings.gcdMarkerColor
+                bar.gcdMarker:SetVertexColor(gmColor.r, gmColor.g, gmColor.b, gmColor.a)
+                bar.gcdMarker:Show()
+            else
+                bar.gcdMarker:Hide()
+            end
+        else
+            bar.gcdMarker:Hide()
+        end
+    end
+
+    -- Seal switch zone: amber block from GCD marker to twist window ("press twistFromSeal here")
+    if bar.sealSwitchZone then
+        if iSTSettings.showGCDIndicator and gcdStartFrac > 0.02 and gcdStartFrac < twistStart then
+            local startX = 1 + gcdStartFrac * barWidth
+            local zoneW  = math.max(1, (twistStart - gcdStartFrac) * barWidth)
+            bar.sealSwitchZone:ClearAllPoints()
+            bar.sealSwitchZone:SetPoint("TOPLEFT",    bar, "TOPLEFT",    startX, -1)
+            bar.sealSwitchZone:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", startX,  1)
+            bar.sealSwitchZone:SetWidth(zoneW)
+            bar.sealSwitchZone:Show()
+        else
+            bar.sealSwitchZone:Hide()
+        end
+    end
 
     -- Time remaining text
     local remaining = math.max(0, state.NextSwingTime - now)
@@ -491,12 +702,18 @@ function iST:ShowTwistResult(success)
     local text = self.BarFrame.twistResultText
     local state = self.State
 
+    -- Apply configured size
+    local fontPath = text:GetFont()
+    text:SetFont(fontPath, iSTSettings.twistTextSize or 16, "THICKOUTLINE")
+
     if success then
         text:SetText("Seal Twisted!")
-        text:SetTextColor(0.2, 1, 0.2)
+        local c = iSTSettings.twistSuccessColor
+        text:SetTextColor(c.r, c.g, c.b, c.a)
     else
         text:SetText("Fail Twist!")
-        text:SetTextColor(1, 0.2, 0.2)
+        local c = iSTSettings.twistFailColor
+        text:SetTextColor(c.r, c.g, c.b, c.a)
     end
 
     -- Duration: min(1s, 50% of weapon speed)
@@ -918,6 +1135,38 @@ local function OnEvent(self, event, ...)
         end
         return
     end
+
+    -- GCD tracking: cast-time spells trigger GCD on START; instant spells on SUCCEEDED
+    if event == "UNIT_SPELLCAST_START" then
+        local unit = ...
+        if unit == "player" then
+            iST.State.InCast = true
+            iST.State.GCDStartTime = GetTime()
+            iST.State.GCDEndTime   = GetTime() + iST.CONSTANTS.GCD_DURATION
+        end
+        return
+    end
+
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        local unit = ...
+        if unit == "player" then
+            if not iST.State.InCast then
+                -- Instant spell (no START event fired)
+                iST.State.GCDStartTime = GetTime()
+                iST.State.GCDEndTime   = GetTime() + iST.CONSTANTS.GCD_DURATION
+            end
+            iST.State.InCast = false
+        end
+        return
+    end
+
+    if event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+        local unit = ...
+        if unit == "player" then
+            iST.State.InCast = false
+        end
+        return
+    end
 end
 
 eventFrame:SetScript("OnEvent", OnEvent)
@@ -930,6 +1179,16 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 function iST:OnAddonLoaded()
     -- Initialize saved settings
     self:InitializeSettings()
+
+    -- Set faction-aware default for twistIntoSeal on first load
+    if iSTSettings.twistIntoSeal == "" then
+        local _, playerFaction = UnitFactionGroup("player")
+        if playerFaction == "Horde" then
+            iSTSettings.twistIntoSeal = "Seal of Blood"
+        else
+            iSTSettings.twistIntoSeal = "Seal of the Martyr"
+        end
+    end
 
     -- Version warning (non-blocking)
     if not self.SupportedVersion then
@@ -965,6 +1224,11 @@ function iST:OnAddonLoaded()
     eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("UNIT_AURA")
     eventFrame:RegisterEvent("UNIT_ATTACK_SPEED")
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_START")
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_STOP")
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_FAILED")
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 
     -- Initial seal scan
     self:ScanForActiveSeal()

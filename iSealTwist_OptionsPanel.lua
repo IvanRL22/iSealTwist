@@ -218,6 +218,106 @@ local function CreateInfoText(parent, text, yOffset, fontObj)
     return fs, yOffset - height - 4
 end
 
+local function CreateColorEditor(parent, label, yOffset, getFunc, onChange)
+    local MINI_W = 230
+    local THUMB  = 10
+
+    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
+    fs:SetText(label)
+
+    -- Color swatch (live preview)
+    local swatchBg = parent:CreateTexture(nil, "BACKGROUND")
+    swatchBg:SetSize(18, 18)
+    swatchBg:SetPoint("LEFT", fs, "RIGHT", 8, 0)
+    swatchBg:SetColorTexture(0, 0, 0, 1)
+    local swatch = parent:CreateTexture(nil, "ARTWORK")
+    swatch:SetSize(16, 16)
+    swatch:SetPoint("CENTER", swatchBg, "CENTER")
+    swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+    local function RefreshSwatch()
+        local c = getFunc()
+        swatch:SetVertexColor(c.r, c.g, c.b, 1)
+    end
+    RefreshSwatch()
+    yOffset = yOffset - 20
+
+    local channels = {
+        { key = "r", label = "R", cr = 1, cg = 0.2, cb = 0.2 },
+        { key = "g", label = "G", cr = 0.2, cg = 0.9, cb = 0.2 },
+        { key = "b", label = "B", cr = 0.3, cg = 0.5, cb = 1 },
+        { key = "a", label = "A", cr = 0.8, cg = 0.8, cb = 0.8 },
+    }
+    for _, ch in ipairs(channels) do
+        local rowLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        rowLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 28, yOffset + 1)
+        rowLabel:SetText(ch.label)
+        rowLabel:SetTextColor(ch.cr, ch.cg, ch.cb, 1)
+
+        local valText = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        valText:SetPoint("TOPLEFT", parent, "TOPLEFT", 44 + MINI_W + 6, yOffset + 1)
+        valText:SetTextColor(0.8, 0.8, 0.8, 1)
+
+        local track = CreateFrame("Frame", nil, parent)
+        track:SetSize(MINI_W, 6)
+        track:SetPoint("TOPLEFT", parent, "TOPLEFT", 44, yOffset - 4)
+        track:EnableMouse(true)
+
+        local trackBg = track:CreateTexture(nil, "BACKGROUND")
+        trackBg:SetAllPoints()
+        trackBg:SetColorTexture(0.12, 0.12, 0.16, 0.9)
+
+        local fillTex = track:CreateTexture(nil, "ARTWORK")
+        fillTex:SetPoint("TOPLEFT",    track, "TOPLEFT")
+        fillTex:SetPoint("BOTTOMLEFT", track, "BOTTOMLEFT")
+        fillTex:SetWidth(1)
+        fillTex:SetColorTexture(ch.cr, ch.cg, ch.cb, 0.8)
+
+        local thumb = CreateFrame("Frame", nil, track)
+        thumb:SetSize(THUMB, THUMB)
+        thumb:EnableMouse(true)
+        local thumbTex = thumb:CreateTexture(nil, "OVERLAY")
+        thumbTex:SetAllPoints()
+        thumbTex:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
+        thumbTex:SetVertexColor(0.9, 0.9, 0.9, 1)
+
+        local function SetVis(val)
+            val = math.max(0, math.min(1, val))
+            local xPos = val * (MINI_W - THUMB)
+            thumb:ClearAllPoints()
+            thumb:SetPoint("LEFT", track, "LEFT", xPos, 0)
+            fillTex:SetWidth(math.max(1, val * MINI_W))
+            valText:SetText(string.format("%.2f", val))
+        end
+        local function GetMouse()
+            local cx = select(1, GetCursorPosition()) / UIParent:GetEffectiveScale()
+            local left = track:GetLeft()
+            return math.max(0, math.min(1, math.floor(((cx - left) / MINI_W) * 100 + 0.5) / 100))
+        end
+        local function Apply(val)
+            getFunc()[ch.key] = val
+            SetVis(val)
+            RefreshSwatch()
+            if onChange then onChange() end
+        end
+
+        local dragging = false
+        thumb:SetScript("OnMouseDown", function() dragging = true end)
+        thumb:SetScript("OnMouseUp",   function() dragging = false end)
+        track:SetScript("OnMouseDown", function() Apply(GetMouse()); dragging = true end)
+        track:SetScript("OnMouseUp",   function() dragging = false end)
+        track:SetScript("OnUpdate",    function() if dragging then Apply(GetMouse()) end end)
+        track:EnableMouseWheel(true)
+        track:SetScript("OnMouseWheel", function(_, d)
+            Apply(math.max(0, math.min(1, math.floor((getFunc()[ch.key] + d * 0.05) * 100 + 0.5) / 100)))
+        end)
+
+        SetVis(getFunc()[ch.key])
+        yOffset = yOffset - 16
+    end
+    return yOffset - 8
+end
+
 -- ╭────────────────────────────────────────────────────────────────────────────────╮
 -- │                           Create Options Panel                                 │
 -- ╰────────────────────────────────────────────────────────────────────────────────╯
@@ -493,6 +593,41 @@ function iST:CreateOptionsPanel()
             function(v) iSTSettings.showLatency = v end
         )
 
+        _, y = CreateSectionHeader(generalContent, L["SectionBarColors"], y)
+
+        y = CreateColorEditor(generalContent, L["ColorBar"], y,
+            function() return iSTSettings.barColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorTwistZone"], y,
+            function() return iSTSettings.twistZoneColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorAlert"], y,
+            function() return iSTSettings.alertColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorGCDZone"], y,
+            function() return iSTSettings.gcdZoneColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorTwistMarker"], y,
+            function() return iSTSettings.twistMarkerColor end,
+            function()
+                if iST.BarFrame and iST.BarFrame.twistMarker then
+                    local c = iSTSettings.twistMarkerColor
+                    iST.BarFrame.twistMarker:SetVertexColor(c.r, c.g, c.b, c.a)
+                end
+            end)
+
+        y = CreateColorEditor(generalContent, L["ColorGCDMarker"], y,
+            function() return iSTSettings.gcdMarkerColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorBorderNormal"], y,
+            function() return iSTSettings.borderNormalColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorTwistSuccess"], y,
+            function() return iSTSettings.twistSuccessColor end, nil)
+
+        y = CreateColorEditor(generalContent, L["ColorTwistFail"], y,
+            function() return iSTSettings.twistFailColor end, nil)
+
         scrollChildren[1]:SetHeight(math.abs(y) + 10)
     end
 
@@ -526,6 +661,33 @@ function iST:CreateOptionsPanel()
             function(v) iSTSettings.onlyAsPaladin = v end
         )
 
+        _, y = CreateSettingsCheckbox(displayContent, L["ShowGCDIndicator"], L["ShowGCDIndicatorDesc"], y,
+            function() return iSTSettings.showGCDIndicator end,
+            function(v) iSTSettings.showGCDIndicator = v end
+        )
+
+        _, y = CreateSettingsCheckbox(displayContent, L["ShowWrongSealWarning"], L["ShowWrongSealWarningDesc"], y,
+            function() return iSTSettings.showWrongSealWarning end,
+            function(v) iSTSettings.showWrongSealWarning = v end
+        )
+
+        _, y = CreateSectionHeader(displayContent, L["SectionPulseIndicators"], y)
+
+        _, y = CreateSettingsCheckbox(displayContent, L["ShowGreenPulse"], L["ShowGreenPulseDesc"], y,
+            function() return iSTSettings.showGreenPulse end,
+            function(v) iSTSettings.showGreenPulse = v end
+        )
+
+        _, y = CreateSettingsCheckbox(displayContent, L["ShowOrangePulse"], L["ShowOrangePulseDesc"], y,
+            function() return iSTSettings.showOrangePulse end,
+            function(v) iSTSettings.showOrangePulse = v end
+        )
+
+        _, y = CreateSettingsCheckbox(displayContent, L["ShowRedPulse"], L["ShowRedPulseDesc"], y,
+            function() return iSTSettings.showRedPulse end,
+            function(v) iSTSettings.showRedPulse = v end
+        )
+
         _, y = CreateSectionHeader(displayContent, L["SectionTwistFeedback"], y)
 
         _, y = CreateSettingsCheckbox(displayContent, L["ShowTwistSuccess"], L["ShowTwistSuccessDesc"], y,
@@ -536,6 +698,12 @@ function iST:CreateOptionsPanel()
         _, y = CreateSettingsCheckbox(displayContent, L["ShowTwistFail"], L["ShowTwistFailDesc"], y,
             function() return iSTSettings.showTwistFail end,
             function(v) iSTSettings.showTwistFail = v end
+        )
+
+        _, y = CreateCustomSlider(displayContent, L["TwistTextSize"], y, 8, 32, 1,
+            function() return iSTSettings.twistTextSize end,
+            function(v) iSTSettings.twistTextSize = v end,
+            function(v) return v .. "pt" end
         )
 
         _, y = CreateSectionHeader(displayContent, L["SectionPosition"], y)
@@ -552,6 +720,88 @@ function iST:CreateOptionsPanel()
         _, y = CreateSettingsButton(displayContent, L["TestBar"], 130, y, function()
             iST:StartTestMode()
         end)
+
+        -- ── Seal Pair ──────────────────────────────────────────
+        y = y - 6
+        _, y = CreateSectionHeader(displayContent, L["SectionSealPair"], y)
+
+        -- Seal to Twist (restricted: SoC or SoR)
+        local fromOptions = { "Seal of Command", "Seal of Righteousness" }
+
+        local fromLabel = displayContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fromLabel:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 20, y)
+        fromLabel:SetText(L["TwistFromSeal"])
+        y = y - 20
+
+        local fromDropdown = CreateFrame("Frame", "iSTFromSealDropdown", displayContent, "UIDropDownMenuTemplate")
+        fromDropdown:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 10, y)
+        UIDropDownMenu_SetWidth(fromDropdown, 200)
+        UIDropDownMenu_Initialize(fromDropdown, function(self, level)
+            for _, option in ipairs(fromOptions) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = option
+                info.value = option
+                info.func = function(btn)
+                    UIDropDownMenu_SetSelectedValue(fromDropdown, btn.value)
+                    UIDropDownMenu_SetText(fromDropdown, btn.value)
+                    iSTSettings.twistFromSeal = btn.value
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+        UIDropDownMenu_SetSelectedValue(fromDropdown, iSTSettings.twistFromSeal)
+        UIDropDownMenu_SetText(fromDropdown, iSTSettings.twistFromSeal)
+        y = y - 32
+
+        local fromDesc = displayContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        fromDesc:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 20, y)
+        fromDesc:SetWidth(350)
+        fromDesc:SetJustifyH("LEFT")
+        fromDesc:SetText(L["TwistFromSealDesc"])
+        y = y - fromDesc:GetStringHeight() - 10
+
+        -- Seal to Twist Into (all seals)
+        local intoOptions = {}
+        local seenNames = {}
+        for _, name in pairs(iST.SEALS) do
+            if not seenNames[name] then
+                seenNames[name] = true
+                table.insert(intoOptions, name)
+            end
+        end
+        table.sort(intoOptions)
+
+        local intoLabel = displayContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        intoLabel:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 20, y)
+        intoLabel:SetText(L["TwistIntoSeal"])
+        y = y - 20
+
+        local intoDropdown = CreateFrame("Frame", "iSTIntoSealDropdown", displayContent, "UIDropDownMenuTemplate")
+        intoDropdown:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 10, y)
+        UIDropDownMenu_SetWidth(intoDropdown, 200)
+        UIDropDownMenu_Initialize(intoDropdown, function(self, level)
+            for _, option in ipairs(intoOptions) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = option
+                info.value = option
+                info.func = function(btn)
+                    UIDropDownMenu_SetSelectedValue(intoDropdown, btn.value)
+                    UIDropDownMenu_SetText(intoDropdown, btn.value)
+                    iSTSettings.twistIntoSeal = btn.value
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+        UIDropDownMenu_SetSelectedValue(intoDropdown, iSTSettings.twistIntoSeal)
+        UIDropDownMenu_SetText(intoDropdown, iSTSettings.twistIntoSeal)
+        y = y - 32
+
+        local intoDesc = displayContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        intoDesc:SetPoint("TOPLEFT", displayContent, "TOPLEFT", 20, y)
+        intoDesc:SetWidth(350)
+        intoDesc:SetJustifyH("LEFT")
+        intoDesc:SetText(L["TwistIntoSealDesc"])
+        y = y - intoDesc:GetStringHeight() - 10
 
         scrollChildren[2]:SetHeight(math.abs(y) + 10)
     end
